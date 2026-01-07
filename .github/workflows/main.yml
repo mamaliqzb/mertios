@@ -1,15 +1,18 @@
-name: Auto Collector
+name: Auto Secure Collector
 on:
   schedule:
     - cron: "0 */2 * * *"
   workflow_dispatch:
 jobs:
-  run:
+  run-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: pip install telethon
-      - env:
+      - name: Install dependencies
+        run: |
+          pip install telethon requests pyzipper
+      - name: Run Script
+        env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
@@ -17,10 +20,7 @@ jobs:
           CHANNELS_500: ${{ secrets.CHANNELS_500 }}
           IDS_50: ${{ secrets.IDS_50 }}
           CHANNELS_50: ${{ secrets.CHANNELS_50 }}
+          BALE_TOKEN: ${{ secrets.BALE_TOKEN }}
+          BALE_CHAT_ID: ${{ secrets.BALE_CHAT_ID }}
+          ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
         run: python main.py
-      - run: |
-          git config --global user.name "Bot"
-          git config --global user.email "bot@github.com"
-          git add configs.txt
-          git commit -m "Update" || exit 0
-          git push
