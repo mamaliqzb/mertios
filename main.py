@@ -1,12 +1,16 @@
-import os, re
+import os, re, requests, pyzipper
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
 from itertools import zip_longest
+from datetime import datetime
 
-# تنظیمات اصلی
+# تنظیمات
 API_ID = int(os.environ['API_ID'])
 API_HASH = os.environ['API_HASH']
 SESSION_STRING = os.environ['SESSION_STRING']
+ZIP_PASS = os.environ['ZIP_PASSWORD'].encode()
+BALE_TOKEN = os.environ['BALE_TOKEN']
+BALE_CHAT_ID = os.environ['BALE_CHAT_ID']
 
 def get_env_list(key):
     return [c.strip() for c in os.environ.get(key, '').split(',') if c.strip()]
@@ -14,7 +18,6 @@ def get_env_list(key):
 def fetch(client, target, limit):
     configs = []
     try:
-        # اگر ورودی عدد باشد، آن را تبدیل می‌کند
         entity = int(target) if str(target).replace('-', '').isdigit() else target
         for msg in client.iter_messages(entity, limit=limit*3):
             if msg.text:
@@ -22,34 +25,41 @@ def fetch(client, target, limit):
                 for l in found:
                     if l not in configs: configs.append(l)
             if len(configs) >= limit: break
-    except: return None # اگر خطا داد
+    except: return None
     return configs[:limit]
+
+def send_to_bale(file_path):
+    url = f"https://tapi.bale.ai/bot{BALE_TOKEN}/sendDocument"
+    files = {'document': open(file_path, 'rb')}
+    data = {'chat_id': BALE_CHAT_ID, 'caption': f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"}
+    requests.post(url, files=files, data=data)
 
 def main():
     all_configs = []
     with TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH) as client:
-        # پردازش گروه‌های ۵۰۰ تایی و ۵۰ تایی
-        for group, limit in [ (('IDS_500', 'CHANNELS_500'), 500), (('IDS_50', 'CHANNELS_50'), 50) ]:
-            ids = get_env_list(group[0])
-            names = get_env_list(group[1])
-            
+        groups = [(('IDS_500', 'CHANNELS_500'), 500), (('IDS_50', 'CHANNELS_50'), 50)]
+        for group, limit in groups:
+            ids, names = get_env_list(group[0]), get_env_list(group[1])
             for i_id, i_name in zip_longest(ids, names):
-                res = None
-                if i_id: # اول تلاش با آیدی عددی
-                    print(f"🔍 تلاش با آیدی: {i_id}")
-                    res = fetch(client, i_id, limit)
-                
-                if (res is None or len(res) == 0) and i_name: # اگر نشد، تلاش با نام
-                    print(f"⚠️ آیدی نشد، تلاش با نام: {i_name}")
-                    res = fetch(client, i_name, limit)
-                
+                res = fetch(client, i_id, limit) if i_id else None
+                if (not res) and i_name: res = fetch(client, i_name, limit)
                 if res: all_configs.extend(res)
 
-    # ذخیره نهایی بدون تکراری
-    final = list(dict.fromkeys(all_configs))
-    with open('configs.txt', 'w', encoding='utf-8') as f:
-        f.write('\n'.join(final))
-    print(f"✅ پایان. مجموع: {len(final)}")
+    # ۱. ذخیره موقت در فایلی با نام غیرمرتبط
+    temp_file = "system.log"
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(list(dict.fromkeys(all_configs))))
+
+    # ۲. زیپ کردن با رمز عبور و نام مستعار
+    zip_name = "Storage_Backup_82.zip"
+    with pyzipper.AESZipFile(zip_name, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
+        zf.setpassword(ZIP_PASS)
+        zf.write(temp_file)
+
+    # ۳. ارسال به بله و پاکسازی
+    send_to_bale(zip_name)
+    os.remove(temp_file)
+    os.remove(zip_name)
 
 if __name__ == "__main__":
     main()
