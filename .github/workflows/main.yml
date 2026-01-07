@@ -1,0 +1,26 @@
+name: Auto Collector
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: pip install telethon
+      - env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          IDS_500: ${{ secrets.IDS_500 }}
+          CHANNELS_500: ${{ secrets.CHANNELS_500 }}
+          IDS_50: ${{ secrets.IDS_50 }}
+          CHANNELS_50: ${{ secrets.CHANNELS_50 }}
+        run: python main.py
+      - run: |
+          git config --global user.name "Bot"
+          git config --global user.email "bot@github.com"
+          git add configs.txt
+          git commit -m "Update" || exit 0
+          git push
